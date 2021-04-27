@@ -20,8 +20,8 @@ function investPool(id, maxInvest) {
     return poolzContract.methods.InvestETH(id).send({ value: maxInvest, from: accountAddress, gasPrice: defaultInvestGasPrice, gas: process.env.POOLZ_GAS_LIMIT })
 }
 
-function withdrawPool(id) {
-    return poolzContract.methods.WithdrawInvestment(id).send({ from: accountAddress, gasPrice: defaultClaimGasPrice, gas: process.env.POOLZ_GAS_LIMIT })
+function withdrawPool(investId) {
+    return poolzContract.methods.WithdrawInvestment(investId).send({ from: accountAddress, gasPrice: defaultClaimGasPrice, gas: process.env.POOLZ_GAS_LIMIT })
 }
 
 var maxEthInvest = 0
