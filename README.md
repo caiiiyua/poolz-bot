@@ -4,15 +4,14 @@ A sample Nodejs application to buy tokens from `POOLZ` pool when it open to publ
  
 ## software version
  
-Ensure your `node` and `truffle` version is higher than these:
+Ensure your `node` and `web3` version is higher than these:
 ```sh
 $ node -v
 v15.10.0
-$ truffle version
-Truffle v5.3.0 (core: 5.3.0)
-Solidity v0.5.16 (solc-js)
-Node v15.10.0
-Web3.js v1.2.9
+$ npm list
+├── bignumber.js@9.0.1
+├── dotenv@8.2.0
+└── web3@1.3.5
 ```
    
 ## environment variables

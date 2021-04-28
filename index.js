@@ -1,9 +1,6 @@
 require('dotenv').config();
 const Web3 = require('web3');
 const abi = require('./poolzabi.js')
-const HDWalletProvider = require("@truffle/hdwallet-provider");
-
-const accountAddress = process.env.WALLET_ADDRESS;
 
 const contractAddress = process.env.POOLZ_CONTRACT_ADDRESS;
 const poolId = process.env.POOLZ_POOL_ID;
@@ -11,9 +8,6 @@ const poolId = process.env.POOLZ_POOL_ID;
 const options = {
     timeout: 30000, // ms
     clientConfig: {
-      // Useful if requests are large
-      maxReceivedFrameSize: 100000000,   // bytes - default: 1MiB
-      maxReceivedMessageSize: 100000000, // bytes - default: 8MiB
       // Useful to keep a connection alive
       keepalive: true,
       keepaliveInterval: 60000 // ms
@@ -27,16 +21,13 @@ const options = {
     }
 };
 const web3 = new Web3(new Web3.providers.WebsocketProvider(process.env.INFURA_WSS, options));
-const web3Wallet = new Web3(new HDWalletProvider({
-    privateKeys: [process.env.PRIVATE_KEY],
-    providerOrUrl: process.env.INFURA_HTTPS,
-    pollingInterval: 20000
-}));
+web3.eth.accounts.wallet.add(process.env.PRIVATE_KEY);
+const accountAddress = web3.eth.accounts.wallet[0].address
 
 const defaultInvestGasPrice = web3.utils.toWei(process.env.POOLZ_INVEST_GAS_PRICE, 'gwei');
 const defaultClaimGasPrice = web3.utils.toWei(process.env.POOLZ_CLAIM_GAS_PRICE, 'gwei');
 
-const poolzContract = new web3Wallet.eth.Contract(abi, contractAddress);
+const poolzContract = new web3.eth.Contract(abi, contractAddress);
 
 var maxEthInvest = 0
 var leftToken = 0
@@ -142,27 +133,19 @@ function doWithdraw(blockTime, avgBlockTime) {
 const inProgressReducer = (a, b) => a && b;
 
 const init = async () => {
-    web3.eth.subscribe('newBlockHeaders', function(error, result){
-        if (!error) {
-            let blockTime = result['timestamp']
-            let avgBlockTime = calculateAvgBlockTime()
-            addBlockTime(blockTime)
-
-            doInvest(blockTime, avgBlockTime)
-            doWithdraw(blockTime, avgBlockTime)
-            return;
-        }
-    
-        console.error(error);
-    })
+    web3.eth.subscribe('newBlockHeaders')
     .on("connected", function(subscriptionId){
         console.log("connected:", subscriptionId);
     })
-    .on("data", function(error, blockHeader){
-        if (!error) {
-            console.log("data:", blockHeader);
-        }
-        console.error(error)
+    .on("data", function(blockHeader){
+        console.log(blockHeader)
+        let blockTime = blockHeader['timestamp']
+        let avgBlockTime = calculateAvgBlockTime()
+        addBlockTime(blockTime)
+
+        doInvest(blockTime, avgBlockTime)
+        doWithdraw(blockTime, avgBlockTime)
+        return;
     })
     .on("error", console.error);
 }
