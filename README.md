@@ -1,6 +1,6 @@
 # Poolz Bot
  
-A sample application to buy tokens from `POOLZ` pool when it open to public and withdraw when the tokens are unlocked.
+A sample Nodejs application to buy tokens from `POOLZ` pool when it open to public and withdraw when the tokens are unlocked.
  
 ## software version
  
