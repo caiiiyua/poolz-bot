@@ -96,7 +96,7 @@ function doWithdraw(blockTime, avgBlockTime) {
         return;
     }
 
-    if (withdrawInProgress.values().reduce(inProgressReducer) == true) {
+    if ([...withdrawInProgress.values()].reduce(inProgressReducer) == true) {
         console.log("Transaction in progress, wait for a while...")
         return;
     }
@@ -160,7 +160,7 @@ poolzContract.methods.MaxETHInvest().call().then(function(result) {
 })
 
 poolzContract.methods.GetMyInvestmentIds().call({ from: accountAddress }).then(function(investIds) {
-    console.log("My investment Ids:", investIds)
+    console.log("My investment Ids:", investIds, "Last investmentId: ", process.env.POOLZ_LAST_INVESTMENT_ID)
     investIds.forEach(id => {
         if (id > process.env.POOLZ_LAST_INVESTMENT_ID) {
             myInvestmentIds.push(id)
