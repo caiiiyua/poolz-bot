@@ -8,8 +8,30 @@ const accountAddress = process.env.WALLET_ADDRESS;
 const contractAddress = process.env.POOLZ_CONTRACT_ADDRESS;
 const poolId = process.env.POOLZ_POOL_ID;
 
-const web3 = new Web3(new Web3.providers.WebsocketProvider(process.env.INFURA_WSS));
-const web3Wallet = new Web3(new HDWalletProvider([process.env.PRIVATE_KEY], process.env.INFURA_HTTPS) );
+const options = {
+    timeout: 30000, // ms
+    clientConfig: {
+      // Useful if requests are large
+      maxReceivedFrameSize: 100000000,   // bytes - default: 1MiB
+      maxReceivedMessageSize: 100000000, // bytes - default: 8MiB
+      // Useful to keep a connection alive
+      keepalive: true,
+      keepaliveInterval: 60000 // ms
+    },
+    // Enable auto reconnection
+    reconnect: {
+        auto: true,
+        delay: 5000, // ms
+        maxAttempts: 5,
+        onTimeout: false
+    }
+};
+const web3 = new Web3(new Web3.providers.WebsocketProvider(process.env.INFURA_WSS, options));
+const web3Wallet = new Web3(new HDWalletProvider({
+    privateKeys: [process.env.PRIVATE_KEY],
+    providerOrUrl: process.env.INFURA_HTTPS,
+    pollingInterval: 20000
+}));
 
 const defaultInvestGasPrice = web3.utils.toWei(process.env.POOLZ_INVEST_GAS_PRICE, 'gwei');
 const defaultClaimGasPrice = web3.utils.toWei(process.env.POOLZ_CLAIM_GAS_PRICE, 'gwei');
