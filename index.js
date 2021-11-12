@@ -94,10 +94,6 @@ function doInvest(blockNumber, blockTime, avgBlockTime) {
             logger.debug("Pool has been closed...")
             return;
         }
-        if (transactionInProgress == true) {
-            logger.debug("Transaction in progress, wait for a while...")
-            return;
-        }
         if (invested > 0 || failed == process.env.MAX_RETRY) {
             logger.debug("Invested: %s", invested)
             // process.exit(-1)
@@ -130,10 +126,6 @@ function doWithdraw(blockNumber, blockTime, avgBlockTime) {
     if (countdown - avgBlockTime <= 0) {
         if (withdrawInProgress.size == 0) {
             logger.debug("Withdraw completed! %s", myInvestmentIds)
-            return;
-        }
-        if ([...withdrawInProgress.values()].reduce(inProgressReducer) == true) {
-            logger.debug("Transaction in progress, wait for a while...")
             return;
         }
         myInvestmentIds.forEach(investId => {
