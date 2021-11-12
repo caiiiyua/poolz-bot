@@ -1,6 +1,24 @@
 require('dotenv').config();
 const Web3 = require('web3');
-const abi = require('./poolzabi.js')
+const abi = require('./poolzabi.js');
+const winston = require('winston');
+const format = winston.format;
+
+const logger = winston.createLogger({
+    level: 'debug',
+    format: format.combine(
+        format.timestamp({
+            format: 'YYYY-MM-DD HH:mm:ss'
+        }),
+        format.splat(),
+        format.colorize(),
+        format.simple()
+    ),
+    transports: [
+      new winston.transports.Console(),
+      new winston.transports.File({ filename: 'poolzbot.log' })
+    ]
+  });
 
 const contractAddress = process.env.POOLZ_CONTRACT_ADDRESS;
 const poolId = process.env.POOLZ_POOL_ID;
@@ -62,71 +80,76 @@ function addBlockTime(blockTime) {
 function calculateAvgBlockTime() {
     if (lastBlockTime.length == 0) return - 1
     let sum = lastBlockTime[lastBlockTime.length - 1] - lastBlockTime[0]
-    return sum / lastBlockTime.length
+    let avg = sum / lastBlockTime.length
+    return avg
 }
 
-function doInvest(blockTime, avgBlockTime) {
+function doInvest(blockNumber, blockTime, avgBlockTime) {
     let countdown = startTime - blockTime
-    let countdown2 = startTime - Date.now()/1000
-    console.log("startTime:", startTime, "leftToken: ", leftToken, "maxEthInvest: ", maxEthInvest, "timestamp: ", blockTime);
-    console.log("countdown:", countdown, "countdown2", countdown2, "average Blocktime:", avgBlockTime)
-    if (blockTime >= stopTime) {
-        console.log("Pool has been closed...")
-        return;
-    }
-    if (invested > 0 || failed == process.env.MAX_RETRY) {
-        console.log("Invested: ", invested)
-        // process.exit(-1)
-        return;
-    }
-    if (transactionInProgress == true) {
-        console.log("Transaction in progress, wait for a while...")
-        return;
-    }
+    logger.debug("startTime: %s, leftToken: %s, maxEthInvest: %s, timestamp: %s, average Blocktime: %s, blockNumber: %s",
+    startTime, leftToken, maxEthInvest, blockNumber, avgBlockTime, blockNumber);
+    
     if (countdown - avgBlockTime <= 0) {
+        if (blockTime >= stopTime) {
+            logger.debug("Pool has been closed...")
+            return;
+        }
+        if (transactionInProgress == true) {
+            logger.debug("Transaction in progress, wait for a while...")
+            return;
+        }
+        if (invested > 0 || failed == process.env.MAX_RETRY) {
+            logger.debug("Invested: %s", invested)
+            // process.exit(-1)
+            if (myInvestmentIds.length == 0) {
+                getInvestmentIds()
+            }
+            return;
+        }
         for (let index = 0; index < process.env.MAX_INVESTMENT; index++) {
             transactionInProgress = true
             investPool(poolId, maxEthInvest).then(result => {
                 invested += maxEthInvest
                 transactionInProgress = false
-                console.log(result)
+                logger.debug(result)
             }).catch(error => {
                 transactionInProgress = false
                 failed = failed + 1
                 console.error(error)
             })
         }
+    } else {
+        logger.debug("Pool is open to public in %s", countdown)
     }
 }
 
-function doWithdraw(blockTime, avgBlockTime) {
+function doWithdraw(blockNumber, blockTime, avgBlockTime) {
     let countdown = claimTime - blockTime
-    console.log("claimTime:", claimTime, "leftToken: ", leftToken, "timestamp: ", blockTime);
-    console.log("countdown:", countdown, "average Blocktime:", avgBlockTime)
-
-    if (withdrawInProgress.size == 0) {
-        console.log("Withdraw completed! ", myInvestmentIds)
-        return;
-    }
-
-    if ([...withdrawInProgress.values()].reduce(inProgressReducer) == true) {
-        console.log("Transaction in progress, wait for a while...")
-        return;
-    }
+    logger.debug("claimTime: %s, countdown: %s, timestamp: %s, average Blocktime: %s, blockNumber: %s", claimTime, countdown, blockTime, avgBlockTime, blockNumber);
 
     if (countdown - avgBlockTime <= 0) {
+        if (withdrawInProgress.size == 0) {
+            logger.debug("Withdraw completed! %s", myInvestmentIds)
+            return;
+        }
+        if ([...withdrawInProgress.values()].reduce(inProgressReducer) == true) {
+            logger.debug("Transaction in progress, wait for a while...")
+            return;
+        }
         myInvestmentIds.forEach(investId => {
             if (withdrawInProgress.has(investId) && withdrawInProgress.get(investId) == false) {
                 withdrawInProgress.set(investId, true)
                 withdrawPool(investId).then(result => {
                     withdrawInProgress.delete(investId)
-                    console.log(result)
+                    logger.debug(result)
                 }).catch(error => {
                     withdrawInProgress.set(investId, false)
                     console.error(error)
                 })
             }
         });
+    } else {
+        logger.debug("Token is unlock in %s", countdown)
     }
 }
 
@@ -135,16 +158,17 @@ const inProgressReducer = (a, b) => a && b;
 const init = async () => {
     web3.eth.subscribe('newBlockHeaders')
     .on("connected", function(subscriptionId){
-        console.log("connected:", subscriptionId);
+        logger.debug("connected: %s", subscriptionId);
     })
     .on("data", function(blockHeader){
-        console.log(blockHeader)
+        logger.debug("%s", blockHeader)
         let blockTime = blockHeader['timestamp']
+        let blockNumber = blockHeader['number']
         let avgBlockTime = calculateAvgBlockTime()
         addBlockTime(blockTime)
 
-        doInvest(blockTime, avgBlockTime)
-        doWithdraw(blockTime, avgBlockTime)
+        doInvest(blockNumber, blockTime, avgBlockTime)
+        doWithdraw(blockNumber, blockTime, avgBlockTime)
         return;
     })
     .on("error", console.error);
@@ -164,15 +188,17 @@ poolzContract.methods.MaxETHInvest().call().then(function(result) {
     maxEthInvest = result
 })
 
-poolzContract.methods.GetMyInvestmentIds().call({ from: accountAddress }).then(function(investIds) {
-    console.log("My investment Ids:", investIds, "Last investmentId: ", process.env.POOLZ_LAST_INVESTMENT_ID)
-    investIds.forEach(id => {
-        if (id > process.env.POOLZ_LAST_INVESTMENT_ID) {
-            myInvestmentIds.push(id)
-            withdrawInProgress.set(id, false)
-        }
-    });
-    console.log("Waiting to claim Ids:", myInvestmentIds)
-})
+function getInvestmentIds() {
+    poolzContract.methods.GetMyInvestmentIds().call({ from: accountAddress }).then(function(investIds) {
+        logger.debug("My investment Ids: %s Last investmentId: %s", investIds, process.env.POOLZ_LAST_INVESTMENT_ID)
+        investIds.forEach(id => {
+            if (id > process.env.POOLZ_LAST_INVESTMENT_ID) {
+                myInvestmentIds.push(id)
+                withdrawInProgress.set(id, false)
+            }
+        });
+        logger.debug("Waiting to claim Ids: %s", myInvestmentIds)
+    })
+}
 
 init();
